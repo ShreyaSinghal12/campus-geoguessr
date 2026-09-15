@@ -1,0 +1,430 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0b1020;
+  color: #ffffff;
+  overflow: hidden;
+}
+
+/* While dragging, stop the browser selecting text and keep the
+   resize cursor even when the pointer runs off the handle. */
+body.resizing {
+  user-select: none;
+  cursor: nwse-resize;
+}
+
+.stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---------- the photo ---------- */
+
+.scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #141a2e;
+  color: #7c8aa8;
+  font-size: 15px;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 22%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 30%);
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #22c55e;
+  color: #05230f;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.brand-text small {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.round-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(10, 14, 28, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.round-chip small {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+.round-chip strong {
+  font-size: 14px;
+}
+
+/* ---------- error ---------- */
+
+.error-toast {
+  position: absolute;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1400;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: rgba(153, 27, 27, 0.92);
+  border: 1px solid #ef4444;
+  font-size: 14px;
+}
+
+/* ---------- backdrop ---------- */
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(4, 7, 18, 0.82);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+
+.backdrop.visible {
+  opacity: 1;
+}
+
+/* ---------- map dock ---------- */
+
+.map-dock {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: width 320ms ease, transform 320ms ease;
+}
+
+.map-frame {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  transition: height 320ms ease;
+}
+
+/* Transitions must be off during a drag or the map lags the cursor. */
+.map-dock.dragging,
+.map-dock.dragging .map-frame {
+  transition: none;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- resize handle ---------- */
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 600;
+  width: 34px;
+  height: 34px;
+  cursor: nwse-resize;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(11, 16, 32, 0.78) 55%, transparent 55%);
+  border-bottom-right-radius: 14px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.map-dock:hover .resize-handle,
+.map-dock.dragging .resize-handle {
+  opacity: 1;
+}
+
+/* The two diagonal grip strokes. */
+.resize-handle span {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  margin: -3px 0 0 -3px;
+}
+
+.resize-handle span::before,
+.resize-handle span::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 2px;
+}
+
+.resize-handle span::before {
+  top: 2px;
+  left: 0;
+  width: 12px;
+  height: 2px;
+}
+
+.resize-handle span::after {
+  top: 0;
+  left: 2px;
+  width: 2px;
+  height: 12px;
+}
+
+.pin-toggle {
+  position: absolute;
+  top: 10px;
+  left: 44px;
+  z-index: 500;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #0b1020;
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.map-dock:hover .pin-toggle {
+  opacity: 1;
+}
+
+/* result mode - dock moves to centre of screen */
+
+.map-dock.result-mode {
+  right: 50%;
+  bottom: 50%;
+  width: min(940px, 92vw);
+  transform: translate(50%, 50%);
+}
+
+.map-dock.result-mode .map-frame {
+  height: min(440px, 52vh);
+}
+
+/* ---------- guess button ---------- */
+
+.guess-btn {
+  width: 100%;
+  padding: 15px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #05230f;
+  background: #22c55e;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(34, 197, 94, 0.32);
+  transition: transform 120ms ease, background 200ms ease;
+}
+
+.guess-btn:hover:not(.disabled) {
+  transform: translateY(-2px);
+}
+
+.guess-btn.disabled {
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  cursor: not-allowed;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- score panel ---------- */
+
+.score-panel {
+  padding: 20px 24px 24px;
+  border-radius: 12px;
+  background: rgba(14, 20, 38, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: center;
+}
+
+.score-bar-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.score-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+  width: 0;
+  transition: width 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.score-line {
+  margin-top: 14px;
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+.score-line strong {
+  font-size: 30px;
+  font-weight: 800;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.score-detail {
+  margin: 8px 0 18px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.next-btn {
+  padding: 12px 34px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #05230f;
+  background: #22c55e;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* ---------- map pins ---------- */
+
+.pin {
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.pin-guess {
+  background: #3b82f6;
+}
+
+.pin-answer {
+  background: #ef4444;
+}
+
+/* ---------- credits ---------- */
+
+.credits {
+  position: absolute;
+  left: 24px;
+  bottom: 18px;
+  z-index: 900;
+  font-size: 11px;
+  opacity: 0.55;
+  max-width: 340px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 720px) {
+  .map-dock,
+  .map-dock.expanded {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto !important;
+  }
+
+  .map-dock.result-mode {
+    left: 16px;
+    right: 16px;
+    bottom: 50%;
+    width: auto;
+    transform: translateY(50%);
+  }
+
+  .resize-handle {
+    display: none;
+  }
+
+  .credits {
+    display: none;
+  }
+}
