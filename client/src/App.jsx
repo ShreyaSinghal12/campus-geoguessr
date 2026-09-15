@@ -10,35 +10,36 @@ const SOUTH_WEST = [30.3500, 76.3590];
 const NORTH_EAST = [30.3570, 76.3760];
 const CENTRE = [30.3535, 76.3675];
 const MAX_SCORE = 1000;
+const ROUND_SECONDS = 120;
 
-// Size the map returns to on a double-click of the handle.
-const DEFAULT_SIZE = { w: 620, h: 400 };
-
-// Limits for the drag-resize.
-const MIN_W = 280;
-const MIN_H = 200;
-
-// When the cursor leaves the map it shrinks to this fraction of
-// whatever size the player dragged it to.
+const DEFAULT_SIZE = { w: 640, h: 420 };
+const MIN_W = 300;
+const MIN_H = 210;
 const COMPACT_RATIO = 0.55;
 
 const guessIcon = L.divIcon({
   className: "",
   html: '<div class="pin pin-guess"></div>',
-  iconSize: [26, 34],
-  iconAnchor: [13, 34]
+  iconSize: [28, 36],
+  iconAnchor: [14, 36]
 });
 
 const answerIcon = L.divIcon({
   className: "",
   html: '<div class="pin pin-answer"></div>',
-  iconSize: [26, 34],
-  iconAnchor: [13, 34]
+  iconSize: [28, 36],
+  iconAnchor: [14, 36]
 });
 
 function formatDistance(metres) {
   if (metres < 1000) return Math.round(metres) + " m";
   return (metres / 1000).toFixed(2) + " km";
+}
+
+function formatClock(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
 }
 
 function clamp(value, low, high) {
@@ -51,6 +52,8 @@ export default function App() {
   const guessMarkerRef = useRef(null);
   const answerLayersRef = useRef([]);
   const resultRef = useRef(null);
+  const guessRef = useRef(null);
+  const submitRef = useRef(null);
   const dragStateRef = useRef(null);
   const frameRef = useRef(0);
 
@@ -61,15 +64,24 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [hovering, setHovering] = useState(false);
-  const [barWidth, setBarWidth] = useState(0);
   const [size, setSize] = useState(DEFAULT_SIZE);
   const [dragging, setDragging] = useState(false);
+  const [shownScore, setShownScore] = useState(0);
+  const [barWidth, setBarWidth] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(ROUND_SECONDS);
+  const [timedOut, setTimedOut] = useState(false);
 
   const expanded = pinned || hovering || dragging;
 
+  // Mirrors for the timer and map handlers, which are registered
+  // once and would otherwise capture stale state.
   useEffect(() => {
     resultRef.current = result;
   }, [result]);
+
+  useEffect(() => {
+    guessRef.current = guess;
+  }, [guess]);
 
   useEffect(() => {
     fetch(API + "/api/challenge/today")
@@ -100,8 +112,6 @@ export default function App() {
       maxZoom: 19
     }).addTo(map);
 
-    L.control.zoom({ position: "topright" }).addTo(map);
-
     map.on("click", (event) => {
       if (resultRef.current) return;
 
@@ -124,27 +134,83 @@ export default function App() {
     };
   }, []);
 
-  // Leaflet must be told whenever its container changes size.
-  // 320ms matches the CSS transition.
+  // ---------------------------------------------------------------
+  // Round timer. Ticks only while a challenge is loaded and no
+  // result has been revealed. Reaching zero submits automatically.
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (!challenge || result) return;
+
+    const id = setInterval(() => {
+      setSecondsLeft((previous) => {
+        if (previous <= 1) {
+          clearInterval(id);
+          setTimedOut(true);
+          if (submitRef.current) submitRef.current(true);
+          return 0;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [challenge, result]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || dragging) return;
-    const id = setTimeout(() => map.invalidateSize(), 320);
+    const id = setTimeout(() => map.invalidateSize(), 340);
     return () => clearTimeout(id);
   }, [expanded, result, dragging]);
 
+  // Count the score up once the result lands.
   useEffect(() => {
     if (!result) {
+      setShownScore(0);
       setBarWidth(0);
       return;
     }
-    const id = setTimeout(() => setBarWidth((result.score / MAX_SCORE) * 100), 400);
-    return () => clearTimeout(id);
+
+    const barTimer = setTimeout(() => setBarWidth((result.score / MAX_SCORE) * 100), 500);
+
+    const target = result.score;
+    const duration = 1100;
+    const startedAt = performance.now();
+    let raf;
+
+    const tick = (now) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setShownScore(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+
+    const startTimer = setTimeout(() => {
+      raf = requestAnimationFrame(tick);
+    }, 500);
+
+    return () => {
+      clearTimeout(barTimer);
+      clearTimeout(startTimer);
+      cancelAnimationFrame(raf);
+    };
+  }, [result]);
+
+  // Space advances from the result screen.
+  useEffect(() => {
+    if (!result) return;
+    const onKey = (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        playAgain();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [result]);
 
   // ---------------------------------------------------------------
-  // Drag-to-resize. The dock is anchored bottom-right, so dragging
-  // the top-left handle left and up makes the map larger.
+  // Resize handling
   // ---------------------------------------------------------------
   function beginResize(clientX, clientY) {
     dragStateRef.current = {
@@ -153,7 +219,7 @@ export default function App() {
       startW: size.w,
       startH: size.h
     };
-    setPinned(true);      // stay open for the whole drag
+    setPinned(true);
     setDragging(true);
   }
 
@@ -161,15 +227,11 @@ export default function App() {
     const state = dragStateRef.current;
     if (!state) return;
 
-    const maxW = window.innerWidth - 60;
-    const maxH = window.innerHeight - 190;
+    setSize({
+      w: clamp(state.startW + (state.startX - clientX), MIN_W, window.innerWidth - 60),
+      h: clamp(state.startH + (state.startY - clientY), MIN_H, window.innerHeight - 200)
+    });
 
-    const nextW = clamp(state.startW + (state.startX - clientX), MIN_W, maxW);
-    const nextH = clamp(state.startH + (state.startY - clientY), MIN_H, maxH);
-
-    setSize({ w: nextW, h: nextH });
-
-    // Redraw tiles smoothly while the drag is in progress.
     cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
       if (mapRef.current) mapRef.current.invalidateSize({ animate: false });
@@ -182,8 +244,6 @@ export default function App() {
     if (mapRef.current) mapRef.current.invalidateSize();
   }
 
-  // Listeners live on window so the drag survives the cursor
-  // leaving the handle, which it always does.
   useEffect(() => {
     if (!dragging) return;
 
@@ -209,31 +269,42 @@ export default function App() {
 
   function resetSize() {
     setSize(DEFAULT_SIZE);
-    setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 320);
+    setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 340);
   }
 
-  async function submitGuess() {
-    if (!challenge || !guess || submitting) return;
+  // ---------------------------------------------------------------
+  // Submitting. On timeout with no pin dropped, the round is scored
+  // zero locally and the answer is still revealed.
+  // ---------------------------------------------------------------
+  async function submitGuess(fromTimeout) {
+    const currentGuess = guessRef.current;
+
+    if (!challenge || resultRef.current || submitting) return;
+    if (!currentGuess && !fromTimeout) return;
 
     setSubmitting(true);
     setError("");
+
+    // No pin and time is up: use the campus centre so the server
+    // still returns the true location, then force the score to 0.
+    const payload = currentGuess
+      ? { challengeId: challenge.challengeId, lat: currentGuess.lat, lng: currentGuess.lng }
+      : { challengeId: challenge.challengeId, lat: CENTRE[0], lng: CENTRE[1] };
 
     try {
       const response = await fetch(API + "/api/guess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          challengeId: challenge.challengeId,
-          lat: guess.lat,
-          lng: guess.lng
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "request failed");
 
-      setResult(data);
-      revealAnswer(data);
+      const finalResult = currentGuess ? data : { ...data, score: 0, skipped: true };
+
+      setResult(finalResult);
+      revealAnswer(finalResult, currentGuess);
     } catch (err) {
       setError("Could not submit your guess: " + err.message);
     } finally {
@@ -241,30 +312,44 @@ export default function App() {
     }
   }
 
-  function revealAnswer(data) {
+  // Kept in a ref so the timer can call the latest version.
+  useEffect(() => {
+    submitRef.current = submitGuess;
+  });
+
+  function revealAnswer(data, usedGuess) {
     const map = mapRef.current;
     if (!map) return;
 
     const answerPoint = [data.actualLat, data.actualLng];
-    const guessPoint = [guess.lat, guess.lng];
 
     const answerMarker = L.marker(answerPoint, { icon: answerIcon })
       .addTo(map)
-      .bindTooltip(data.name, { permanent: true, direction: "top", offset: [0, -30] });
+      .bindTooltip(data.name, { permanent: true, direction: "top", offset: [0, -32] });
 
-    const line = L.polyline([guessPoint, answerPoint], {
-      color: "#ffffff",
-      weight: 3,
-      opacity: 0.9,
-      dashArray: "8 8"
-    }).addTo(map);
+    answerLayersRef.current = [answerMarker];
 
-    answerLayersRef.current = [answerMarker, line];
+    if (usedGuess) {
+      const guessPoint = [usedGuess.lat, usedGuess.lng];
+      const line = L.polyline([guessPoint, answerPoint], {
+        color: "#ffffff",
+        weight: 3,
+        opacity: 0.9,
+        dashArray: "9 9"
+      }).addTo(map);
 
-    setTimeout(() => {
-      map.invalidateSize();
-      map.fitBounds(L.latLngBounds([guessPoint, answerPoint]), { padding: [80, 80] });
-    }, 360);
+      answerLayersRef.current.push(line);
+
+      setTimeout(() => {
+        map.invalidateSize();
+        map.fitBounds(L.latLngBounds([guessPoint, answerPoint]), { padding: [110, 110] });
+      }, 380);
+    } else {
+      setTimeout(() => {
+        map.invalidateSize();
+        map.setView(answerPoint, 17);
+      }, 380);
+    }
   }
 
   function playAgain() {
@@ -282,51 +367,121 @@ export default function App() {
     setResult(null);
     setError("");
     setPinned(false);
+    setSecondsLeft(ROUND_SECONDS);
+    setTimedOut(false);
     map.setView(CENTRE, 16);
-    setTimeout(() => map.invalidateSize(), 320);
+    setTimeout(() => map.invalidateSize(), 340);
   }
 
   const today = new Date().toLocaleDateString("en-IN", {
     day: "numeric",
-    month: "long",
+    month: "short",
     year: "numeric"
   });
 
-  // Inline sizing only applies before the result is revealed;
-  // after that the CSS centre-stage layout takes over.
   const compactW = Math.max(MIN_W, Math.round(size.w * COMPACT_RATIO));
-  const compactH = Math.max(160, Math.round(size.h * COMPACT_RATIO));
+  const compactH = Math.max(170, Math.round(size.h * COMPACT_RATIO));
 
   const dockStyle = result ? undefined : { width: (expanded ? size.w : compactW) + "px" };
   const frameStyle = result ? undefined : { height: (expanded ? size.h : compactH) + "px" };
 
-  return (
-    <div className="stage">
-      {challenge ? (
-        <img className="scene" src={challenge.photoUrl} alt="Today's campus landmark" />
-      ) : (
-        <div className="scene scene-loading">Loading today's location...</div>
-      )}
-      <div className="vignette" />
+  const urgent = secondsLeft <= 20 && !result;
 
-      <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark">CG</span>
-          <span className="brand-text">
-            Campus Geoguessr
-            <small>Thapar Institute</small>
-          </span>
+  const verdict = result
+    ? result.skipped
+      ? "Timed out"
+      : result.distanceMetres < 40
+      ? "Spot on"
+      : result.distanceMetres < 150
+      ? "Very close"
+      : result.distanceMetres < 400
+      ? "Not bad"
+      : "Way off"
+    : "";
+
+  return (
+    <div className={"stage" + (result ? " revealed" : "")}>
+      <div className="scene-holder">
+        {challenge ? (
+          <img className="scene" src={challenge.photoUrl} alt="Today's campus landmark" />
+        ) : (
+          <div className="scene scene-loading">Loading today's location...</div>
+        )}
+        {result && (
+          <div className="scene-caption">
+            <small>Landmark</small>
+            <strong>{result.name}</strong>
+          </div>
+        )}
+      </div>
+
+      {!result && <div className="vignette" />}
+
+      {/* Compass strip and countdown, centred at the top */}
+      {!result && (
+        <div className="hud-centre">
+          <div className="compass">
+            <span>N</span>
+            <i /><i /><i /><i />
+            <span>E</span>
+            <i /><i /><i /><i />
+            <span>S</span>
+            <i /><i /><i /><i />
+            <span>W</span>
+            <i /><i /><i /><i />
+            <div className="compass-needle" />
+          </div>
+          <div className={"timer" + (urgent ? " urgent" : "")}>
+            {formatClock(secondsLeft)}
+          </div>
         </div>
-        <div className="round-chip">
-          <small>Daily challenge</small>
+      )}
+
+      {/* Left control stack */}
+      {!result && (
+        <div className="side-controls">
+          <button onClick={() => mapRef.current && mapRef.current.zoomIn()} title="Zoom in">+</button>
+          <button onClick={() => mapRef.current && mapRef.current.zoomOut()} title="Zoom out">-</button>
+          <button
+            onClick={() => mapRef.current && mapRef.current.setView(CENTRE, 16)}
+            title="Recentre the map"
+          >
+            &#9678;
+          </button>
+        </div>
+      )}
+
+      <div className="brand">
+        <span className="brand-mark">CG</span>
+        <span className="brand-text">
+          Campus Geoguessr
+          <small>Thapar Institute</small>
+        </span>
+      </div>
+
+      {/* Scoreboard strip */}
+      <div className="scoreboard">
+        <div className={"score-cell" + (!result ? " active" : "")}>
+          <small>Round</small>
           <strong>{today}</strong>
+        </div>
+        <div className="score-cell">
+          <small>Time</small>
+          <strong>{result ? "--:--" : formatClock(secondsLeft)}</strong>
+        </div>
+        <div className="score-cell">
+          <small>Distance</small>
+          <strong>{result ? formatDistance(result.distanceMetres) : "-"}</strong>
+        </div>
+        <div className="score-cell total">
+          <small>Total</small>
+          <strong>{result ? shownScore : "-"}</strong>
         </div>
       </div>
 
       {error && <div className="error-toast">{error}</div>}
 
-      <div className={"backdrop" + (result ? " visible" : "")} />
-
+      {/* Map dock */}
       <div
         className={
           "map-dock" +
@@ -370,36 +525,51 @@ export default function App() {
           )}
         </div>
 
-        {!result ? (
+        {!result && (
           <button
             className={"guess-btn" + (guess ? "" : " disabled")}
-            onClick={submitGuess}
+            onClick={() => submitGuess(false)}
             disabled={!guess || submitting}
           >
             {submitting ? "Checking..." : guess ? "Guess" : "Place your pin on the map"}
           </button>
-        ) : (
-          <div className="score-panel">
-            <div className="score-bar-track">
-              <div className="score-bar-fill" style={{ width: barWidth + "%" }} />
-            </div>
-            <div className="score-line">
-              <strong>{result.score}</strong> points
-            </div>
-            <p className="score-detail">
-              Your guess was <strong>{formatDistance(result.distanceMetres)}</strong> from{" "}
-              <strong>{result.name}</strong>
-            </p>
-            <button className="next-btn" onClick={playAgain}>
-              Play again
-            </button>
-          </div>
         )}
       </div>
 
-      <div className="credits">
-        Photos and place data from Google Maps. Map tiles from OpenStreetMap contributors.
-      </div>
+      {/* Result bar */}
+      {result && (
+        <div className="result-bar">
+          <div className="result-left">
+            <div className={"verdict" + (result.skipped ? " timeout" : "")}>{verdict}</div>
+            <div className="result-distance">
+              {result.skipped
+                ? "No pin was placed before time ran out"
+                : formatDistance(result.distanceMetres) + " away"}
+            </div>
+          </div>
+
+          <button className="next-btn" onClick={playAgain}>
+            Next
+            <em>
+              hit <span>space</span> to continue
+            </em>
+          </button>
+
+          <div className="result-right">
+            <div className="points-ring">{shownScore}</div>
+            <small>of {MAX_SCORE} points</small>
+            <div className="points-bar">
+              <div className="points-fill" style={{ width: barWidth + "%" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!result && (
+        <div className="credits">
+          Photos and place data from Google Maps. Map tiles from OpenStreetMap contributors.
+        </div>
+      )}
     </div>
   );
 }
