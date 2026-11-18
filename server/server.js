@@ -510,12 +510,16 @@ app.get("/api/stats", auth.requireUser, async (req, res) => {
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const today = await db.query(
-      `SELECT u.username, g.score, ROUND(g.distance_m)::int AS distance_m
+      `SELECT u.username,
+              SUM(g.score)::int AS score,
+              COUNT(*)::int AS rounds,
+              ROUND(MIN(g.distance_m))::int AS best_distance_m
        FROM guesses g
        JOIN users u ON u.id = g.user_id
        JOIN daily_challenges dc ON dc.id = g.challenge_id
        WHERE dc.challenge_date = CURRENT_DATE
-       ORDER BY g.score DESC, g.created_at ASC
+       GROUP BY u.id, u.username
+       ORDER BY score DESC, MIN(g.created_at) ASC
        LIMIT 20`
     );
 

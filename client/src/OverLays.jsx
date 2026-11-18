@@ -119,8 +119,8 @@ export function LeaderboardPanel({ username, onClose }) {
             <tr>
               <th>#</th>
               <th>Player</th>
-              {tab === "today" ? <th>Distance</th> : <th>Rounds</th>}
-              <th>{tab === "today" ? "Score" : "Total"}</th>
+              <th>Rounds</th>
+              <th>{tab === "today" ? "Day total" : "Total"}</th>
             </tr>
           </thead>
           <tbody>
@@ -131,9 +131,7 @@ export function LeaderboardPanel({ username, onClose }) {
               >
                 <td>{index + 1}</td>
                 <td>{row.username}</td>
-                <td>
-                  {tab === "today" ? row.distance_m + " m" : row.rounds}
-                </td>
+                <td>{tab === "today" ? row.rounds + "/3" : row.rounds}</td>
                 <td className="score-col">
                   {tab === "today" ? row.score : row.total_score}
                 </td>
