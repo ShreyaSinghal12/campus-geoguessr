@@ -27,7 +27,7 @@ CREATE TABLE guesses (
 );
 
 INSERT INTO landmarks (name, photo_url, lat, lng) VALUES
-('COS', 'https://lh3.googleusercontent.com/place-photos/AG9NLjC-7Qr_i6VCBgSEE2AXXsSq2LgTxJAFs_bnbRkk7R-LNwHDw_STJNmYUi_WVdIsgsBM-sMaik1U_tW-u_GSHRkVtUvVK1bRiI-sBqJ2Mbq4uCRe9x2SutU5LbP2QNhKTbXyNqmdW3X5O8ZaFA=s4800-w800-h600', 30.3521148, 76.3737197),
+('Main Gate', 'https://lh3.googleusercontent.com/gps-cs-s/AHRPTWmKwhRuHtjxdez1iVsvlVBvShNuGfdVdn9dQfcMXmonvsRJzEsjV6iCkaXB4UJWrm85LtvGUJQ8G3clzIJ8qWCQtn72uEjbePBsfOHLZeal3dHU0PBmPS-PkSWp8cCeg4VyNnoJbQ=w426-h240-k-no', 30.3544226, 76.3625535),
 ('Nava Nalanda Central Library', 'https://lh3.googleusercontent.com/place-photos/AG9NLjB-fn55RlZoT6FA9onwv3muc7mm8La-QrunoXnKw7U3-SGS03ro8ZfSsVvra0tq47icen2MOi_Fi162_yhXCsFhwi40PPtS1Vytb38e_YJFX5ym28kTyAM0S62dO_nsS2wckn6je0U7Q1ylqbw=s4800-w800-h600', 30.3543875, 76.3695781),
 ('Auditorium', 'https://lh3.googleusercontent.com/place-photos/AG9NLjArq3u8qkJHM2e_xqZvrEQN1XWs3zeexsbG4WVjtstJG36hXQY_Lj2uC-il41sP_pQ-6-BK1eOgYabIW8OQzvRvTTuDevgJceuZIw0eH1AaAvVYgzH-6ySw3Eki2zE-zZPvan2GOJVfkgzbfA=s4800-w800-h600', 30.3519998, 76.3709219),
 ('Badminton Hall', 'https://lh3.googleusercontent.com/place-photos/AG9NLjDsyETLlnn7zJXng9liRklaLc-Kz5EdtdeYo2isAcMFmUJuxKwk9NehzFW4cHXsnjMTFrRflfQxP5VkpwXCJENSQs9EXSo3NVGeYhzraiIcktmxORoSkxl77w9UVsjj_6OHDsCIIhBY0D3q-g=s4800-w800-h600', 30.3548477, 76.3653140),
